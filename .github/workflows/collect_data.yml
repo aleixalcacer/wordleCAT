@@ -1,8 +1,9 @@
 name: Collect Data
 on:
   schedule:
-    # Runs "At 06:00" (see https://crontab.guru)
-    - cron: '0 6 * * *'
+    # Runs "At 00:00" (see https://crontab.guru)
+    - cron: '0 0 * * *'
+    
 jobs:
   collect_data:
     name: Collect data from Twitter
