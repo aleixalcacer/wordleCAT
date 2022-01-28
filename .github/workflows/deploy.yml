@@ -1,23 +1,32 @@
-name: Generate data and Deploy
+name: Deploy
 on:
-  schedule:
-    # Runs "At 06:00." (see https://crontab.guru)
-    - cron: '0 6 * * *'
-jobs:
-  collect_data:
-    name: Trigger Site Rebuild
-    runs-on: macos-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v2
-
-
+  workflow_run:
+    workflows: ["Collect Data"]
+    types:
+      - completed
+  push:
+    branches:    
+      - 'main'
       
-  
+jobs:
   deploy:
     name: Deploy Shiny
-    needs: [ collect_data ]
     runs-on: macos-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v2
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+        
+      - name: Install dependencies
+        run: |
+          install.packages("rsconnect")
+          install.packages(c('tidyverse', 'shiny'))
+        shell: Rscript {0}
+        
+      - name: Push to shinyapps.io
+        run: |
+          rsconnect::setAccountInfo(name='aleixalcacer', token='4D309DAA483BB3B94D4B0B05C65A5E37', secret='${{ secrets.SHINYAPPS }}')
+          rsconnect::deployApp(appName = 'wordleCAT')
+        shell: Rscript {0}
