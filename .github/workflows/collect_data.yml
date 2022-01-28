@@ -1,0 +1,33 @@
+name: Collect Data
+on:
+  schedule:
+    # Runs "At 06:00" (see https://crontab.guru)
+    - cron: '0 6 * * *'
+jobs:
+  collect_data:
+    name: Collect data from Twitter
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Setup R
+        uses: r-lib/actions/setup-r@v2
+
+      - name: Install dependencies
+        run: |
+          install.packages('httr')
+          install.packages('tidyverse')
+          install.packages('jsonlite')
+        shell: Rscript {0}
+        
+      - name: Collect data
+        run: Rscript collect_data.R
+  
+      - name: Commit report
+        run: |
+          git config --global user.name 'Aleix Alcacer'
+          git config --global user.email 'aleixalcacer@gmail.com'
+          git commit -am "Automated report"
+          git push
+ 

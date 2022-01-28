@@ -1,9 +1,5 @@
 name: Deploy
 on:
-  workflow_run:
-    workflows: ["Collect Data"]
-    types:
-      - completed
   push:
     branches:    
       - 'main'
