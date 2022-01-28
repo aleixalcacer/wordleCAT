@@ -1,0 +1,24 @@
+on:
+  schedule:
+    # Runs "At 06:00." (see https://crontab.guru)
+    - cron: '0 6 * * *'
+jobs:
+  collect_data:
+    name: Trigger Site Rebuild
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+
+      
+  
+  deploy:
+    name: Deploy Shiny
+    needs: [ collect_data ]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+        
+    
