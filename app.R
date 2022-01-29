@@ -38,6 +38,18 @@ ui <- fluidPage(
             tabsetPanel(
                 tabPanel("Històric", plotOutput("resultsPlot")),
                 tabPanel("Classificació", tableOutput('classification')),
+                tabPanel("Distribucions",
+                         tabsetPanel(
+                             tabPanel("Per dies",
+                                      uiOutput("distributionInput"),
+                                      plotOutput("distributionPlot")
+                                      ),
+                            tabPanel("Per usuaris",
+                                     uiOutput("distributionUserInput"),
+                                     plotOutput("distributionUserPlot")
+                            ) 
+                         ),
+                )
             )
         )
     )
@@ -47,6 +59,7 @@ ui <- fluidPage(
 server <- function(input, output, session) {
     
     filter_data <- reactive(data %>% filter(day >= input$range[1] & day <= input$range[2]) %>% filter(author %in% input$authors))
+    
     
     output$resultsPlot <- renderPlot({
         plot <- ggplot(filter_data(), aes(x=day, y=score, group=author, color=author)) +
@@ -67,12 +80,56 @@ server <- function(input, output, session) {
         plot
     })
     
+    output$distributionInput <- renderUI({
+        selectInput("distday",
+                    "Dia",
+                    choices = filter_data() %>% select(day) %>% arrange(day)
+        )
+    })
+    
+    output$distributionPlot <- renderPlot({
+        plot <- ggplot(filter_data() %>% filter(day == input$distday), aes(x=score)) +
+            geom_density(fill="red", alpha=0.3, adjust=2) +
+            scale_x_continuous(breaks=seq(1, 6, 1), minor_breaks = NULL, limits = c(1, 6)) +
+            ylab("Densitat") +
+            xlab("Intents") +
+            labs(
+                fill = "Usuari",
+            ) +
+            theme_light()
+
+        plot
+    })
+    
+    output$distributionUserInput <- renderUI({
+        selectInput("distauthor",
+                    "Usuari",
+                    choices = filter_data() %>% select(author),
+        )
+    })
+    
+    output$distributionUserPlot <- renderPlot({
+        plot <- ggplot(filter_data() %>% filter(author==input$distauthor), aes(x=score)) +
+            geom_density(fill="red", alpha=0.3, adjust=2) +
+            scale_x_continuous(breaks=seq(1, 6, 1), minor_breaks = NULL, limits = c(1, 6)) +
+            ylab("Densitat") +
+            xlab("Intents") +
+            theme_light()
+        plot
+    })
+    
+    
     output$classification <- renderTable(
         {
             filter_data() %>% group_by(author) %>% summarize(score=sum(score) / n()) %>% arrange(score) %>% mutate(rank = row_number(), .before = author) %>% rename_all(~c("Rànking", "Usuari", "Puntuació mitjana"))
         },
         width="100%"
     )
+    
+    # ggplot(updated_tweets, aes(x=score)) +
+    #     geom_density(fill="red", alpha=0.4, adjust=2) +
+    #     theme_light() +
+    #     scale_x_continuous(breaks=seq(1, 6, 1), minor_breaks = NULL)
 }
 
 # Run the application 
