@@ -3,7 +3,11 @@ on:
   push:
     branches:    
       - 'main'
-      
+  workflow_run:
+    workflows: ["Collect Data"]
+    types:
+      - completed
+
 jobs:
   deploy:
     name: Deploy Shiny
