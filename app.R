@@ -10,6 +10,7 @@
 library(shiny)
 library(tidyverse)
 
+
 data <- read_csv("results.csv")
 
 # Define UI for application that draws a histogram
@@ -38,18 +39,7 @@ ui <- fluidPage(
             tabsetPanel(
                 tabPanel("Històric", plotOutput("resultsPlot")),
                 tabPanel("Classificació", tableOutput('classification')),
-                tabPanel("Distribucions",
-                         tabsetPanel(
-                             tabPanel("Per dies",
-                                      uiOutput("distributionInput"),
-                                      plotOutput("distributionPlot")
-                                      ),
-                            tabPanel("Per usuaris",
-                                     uiOutput("distributionUserInput"),
-                                     plotOutput("distributionUserPlot")
-                            ) 
-                         ),
-                )
+                tabPanel("Distribucions", plotOutput("distributionPlot")),
             )
         )
     )
@@ -58,17 +48,16 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
     
-    filter_data <- reactive(data %>% filter(day >= input$range[1] & day <= input$range[2]) %>% filter(author %in% input$authors))
-    
+    filter_data_ <- reactive(data %>% filter(day >= input$range[1] & day <= input$range[2]) %>% filter(author %in% input$authors))
+    levels_ <- reactive(unlist(filter_data_() %>% group_by(author) %>% summarize(score=sum(score) / n()) %>% arrange(score) %>% select(author)))
+    filter_data <- reactive(filter_data_() %>% mutate(author = fct_relevel(author, levels_())))
     
     output$resultsPlot <- renderPlot({
         plot <- ggplot(filter_data(), aes(x=day, y=score, group=author, color=author)) +
             geom_line() +
             geom_point() +
-            scale_y_reverse(limits=c(6, 1), breaks = c(6:1), minor_breaks = NULL) +
-            scale_x_continuous(breaks = seq(input$range[1], input$range[2], by = 1), minor_breaks = F) +
-            xlab("Dies") +
-            ylab("Intents") +
+            scale_y_reverse("Intents", limits=c(7.5, 0.5), breaks = c(7:1), minor_breaks = NULL) +
+            scale_x_continuous("Dies", breaks = seq(input$range[1], input$range[2], by = 1), minor_breaks = F) +
             labs(
                 colour = "Usuari",
             ) + 
@@ -76,60 +65,37 @@ server <- function(input, output, session) {
             theme(
                 legend.position="bottom",
             )
-        
         plot
     })
     
-    output$distributionInput <- renderUI({
-        selectInput("distday",
-                    "Dia",
-                    choices = filter_data() %>% select(day) %>% arrange(day)
-        )
-    })
-    
-    output$distributionPlot <- renderPlot({
-        plot <- ggplot(filter_data() %>% filter(day == input$distday), aes(x=score)) +
-            geom_density(fill="red", alpha=0.3, adjust=2) +
-            scale_x_continuous(breaks=seq(1, 6, 1), minor_breaks = NULL, limits = c(1, 6)) +
-            ylab("Densitat") +
-            xlab("Intents") +
-            labs(
-                fill = "Usuari",
-            ) +
-            theme_light()
-
-        plot
-    })
-    
-    output$distributionUserInput <- renderUI({
-        selectInput("distauthor",
-                    "Usuari",
-                    choices = filter_data() %>% select(author),
-        )
-    })
-    
-    output$distributionUserPlot <- renderPlot({
-        plot <- ggplot(filter_data() %>% filter(author==input$distauthor), aes(x=score)) +
-            geom_density(fill="red", alpha=0.3, adjust=2) +
-            scale_x_continuous(breaks=seq(1, 6, 1), minor_breaks = NULL, limits = c(1, 6)) +
-            ylab("Densitat") +
-            xlab("Intents") +
-            theme_light()
-        plot
-    })
-    
+    output$distributionPlot <- renderPlot(
+        {
+            plot <- ggplot(filter_data(), aes(x=author, y=score, color=author, fill=author)) +
+                geom_violin(trim = FALSE, alpha=0.3) + 
+                geom_jitter(height = 0.05, width = 0.05) +
+                scale_y_reverse("Intents", limits=c(7.5, 0.5), breaks = 7:1, minor_breaks = NULL) +
+                scale_x_discrete("Usuari") +
+                labs(
+                    fill = "Usuari",
+                    color = "Usuari",
+                ) + 
+                theme_light() + 
+                theme(
+                    legend.position="bottom",
+                )
+            plot
+        }
+    )
     
     output$classification <- renderTable(
         {
-            filter_data() %>% group_by(author) %>% summarize(score=sum(score) / n()) %>% arrange(score) %>% mutate(rank = row_number(), .before = author) %>% rename_all(~c("Rànking", "Usuari", "Puntuació mitjana"))
+            filter_data() %>% group_by(author) %>%
+                summarize(score=sum(score) / n()) %>%
+                mutate(rank = row_number(), .before = author) %>%
+                rename_all(~c("Rànking", "Usuari", "Puntuació mitjana"))
         },
         width="100%"
     )
-    
-    # ggplot(updated_tweets, aes(x=score)) +
-    #     geom_density(fill="red", alpha=0.4, adjust=2) +
-    #     theme_light() +
-    #     scale_x_continuous(breaks=seq(1, 6, 1), minor_breaks = NULL)
 }
 
 # Run the application 

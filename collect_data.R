@@ -45,18 +45,18 @@ while (!is.null(next_token)) {
     
     p_tweets <- tweets %>% rename(author = author_id) %>%
         mutate(author = deframe(users)[str_extract(author, paste(users$id, collapse = "|"))]) %>%
-        select(author, text) %>%
-        mutate(text = str_extract(tweets$text, "[0-9]{1,3}\ [0-9]")) %>%
-        separate(text, into=c("day", "score"), sep = " ") %>%
-        mutate(day = as.integer(day), score=as.integer(score))
+        select(author, text)  %>%
+        mutate(text = str_extract(tweets$text, "[0-9]{1,3}\ ([0-9]|X)")) %>%
+        separate(text, into=c("day", "score"), sep = " ")
     
     partial_data <- c(partial_data, list(p_tweets))
 }
 
 p_tweets <- bind_rows(partial_data)
 
-updated_tweets <- bind_rows(p_tweets, old_tweets)
+p_tweets <- p_tweets %>% mutate(score = ifelse(score == "X", 7, score)) %>%
+    mutate(day = as.integer(day), score=as.integer(score)) 
 
-updated_tweets
+updated_tweets <- bind_rows(p_tweets, old_tweets)
 
 write_csv(updated_tweets, "results.csv")
