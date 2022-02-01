@@ -11,6 +11,26 @@ library(shiny)
 library(tidyverse)
 
 
+# Redefine ggplot
+
+ggplot <- function(...) ggplot2::ggplot(...) + theme_minimal()
+
+compute_streak <- function(day) {
+    if (length(day) == 1) {
+        return(1)
+    }
+    streak <- 1
+    for (i in 2:length(day)) {
+        if (day[i-1] - 1 == day[i]) {
+            streak = streak + 1
+        } else {
+            break
+        }
+    }
+    return(streak)
+}
+
+
 data <- read_csv("results.csv")
 
 # Define UI for application that draws a histogram
@@ -52,47 +72,54 @@ server <- function(input, output, session) {
     levels_ <- reactive(unlist(filter_data_() %>% group_by(author) %>% summarize(score=sum(score) / n()) %>% arrange(score) %>% select(author)))
     filter_data <- reactive(filter_data_() %>% mutate(author = fct_relevel(author, levels_())))
     
-    output$resultsPlot <- renderPlot({
-        plot <- ggplot(filter_data(), aes(x=day, y=score, group=author, color=author)) +
-            geom_line() +
-            geom_point() +
-            scale_y_reverse("Intents", limits=c(7.5, 0.5), breaks = c(7:1), minor_breaks = NULL) +
-            scale_x_continuous("Dies", breaks = seq(input$range[1], input$range[2], by = 1), minor_breaks = F) +
-            labs(
-                colour = "Usuari",
-            ) + 
-            theme_light() + 
-            theme(
-                legend.position="bottom",
-            )
-        plot
-    })
+    output$resultsPlot <- renderPlot(
+        {
+            if (!is.null(input$authors)) {
+                
+                plot <- ggplot(filter_data(), aes(x=day, y=score, group=author, color=author)) +
+                    geom_line() +
+                    geom_point() +
+                    scale_y_reverse("Intents", limits=c(7.5, 0.5), breaks = c(7:1), minor_breaks = NULL) +
+                    scale_x_continuous("Dies", breaks = seq(input$range[1], input$range[2], by = 1), minor_breaks = F) +
+                    labs(
+                        colour = "Usuari",
+                    ) + 
+                    theme(
+                        legend.position="bottom",
+                    )
+                plot
+            }
+        }
+    )
     
     output$distributionPlot <- renderPlot(
         {
-            plot <- ggplot(filter_data(), aes(x=author, y=score, color=author, fill=author)) +
-                geom_violin(trim = FALSE, alpha=0.3) + 
-                geom_jitter(height = 0.05, width = 0.05) +
-                scale_y_reverse("Intents", limits=c(7.5, 0.5), breaks = 7:1, minor_breaks = NULL) +
-                scale_x_discrete("Usuari") +
-                labs(
-                    fill = "Usuari",
-                    color = "Usuari",
-                ) + 
-                theme_light() + 
-                theme(
-                    legend.position="bottom",
-                )
-            plot
+            if (!is.null(input$authors)) {
+                plot <- ggplot(filter_data(), aes(x=author, y=score, color=author, fill=author)) +
+                    geom_violin(trim = FALSE, alpha=0.3) + 
+                    geom_jitter(height = 0.05, width = 0.05) +
+                    scale_y_reverse("Intents", limits=c(7.5, 0.5), breaks = 7:1, minor_breaks = NULL) +
+                    scale_x_discrete("Usuari") +
+                    labs(
+                        fill = "Usuari",
+                        color = "Usuari",
+                    ) + 
+                    theme(
+                        legend.position="bottom",
+                    )
+                plot
+            }        
         }
     )
     
     output$classification <- renderTable(
-        {
-            filter_data() %>% group_by(author) %>%
-                summarize(score=sum(score) / n()) %>%
-                mutate(rank = row_number(), .before = author) %>%
-                rename_all(~c("Rànking", "Usuari", "Puntuació mitjana"))
+        {   
+            if (!is.null(input$authors)) {
+                filter_data() %>% group_by(author) %>%
+                    summarize(score=sum(score) / n(), streak = as.integer(compute_streak(day))) %>%
+                    mutate(rank = row_number(), .before = author) %>%
+                    rename_all(~c("Rànking", "Usuari", "Puntuació mitjana", "Ratxa de dies"))
+            }
         },
         width="100%"
     )
