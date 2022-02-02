@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           install.packages("rsconnect")
-          install.packages(c('tidyverse', 'shiny'))
+          install.packages(c('tidyverse', 'shiny', 'ggbump'))
         shell: Rscript {0}
         
       - name: Push to shinyapps.io
