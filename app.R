@@ -14,14 +14,19 @@ library(ggbump)
 # Redefine ggplot
 
 ggplot <- function(...) ggplot2::ggplot(...) +
-    theme_minimal() +
+    theme_void() +
     theme(
-        legend.position="bottom",
+        plot.margin = margin(.5, .5, .5, .5, "cm"),
+        plot.background = element_rect(fill="white", colour = "white"),
+        legend.position="none",
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
+        plot.title = element_text(size = 24, color = "black", family = "Helvetica", face = "bold"),
+        plot.subtitle = element_text(color = "black", family = "Helvetica"),
+        plot.caption = element_text(color = "black", family = "Helvetica"),
     ) +
     labs(
-        caption = "Creat per @aleixalbo"
+        caption = "@aleixalbo"
     )
 
 
@@ -40,7 +45,8 @@ ui <- fluidPage(
                         "Rang de dies:",
                         min = data %>% select(day) %>% min(),
                         max = data %>% select(day) %>% max(),
-                        value = c(data %>% select(day) %>% min(), data %>% select(day) %>% max())
+                        value = c(data %>% select(day) %>% min(), data %>% select(day) %>% max()),
+                        ticks = F,
             ),
             selectInput("authors",
                         "Usuaris",
@@ -74,17 +80,19 @@ server <- function(input, output, session) {
                 p_data <- filter_data()
                 
                 plot <- ggplot(p_data, aes(x=day, y=score, group=author, color=author)) +
-                    geom_line(size=2, alpha=0.2) +
+                    geom_bump(size=2) +
                     geom_point(size=4) +
+                    facet_wrap(~ author, ncol = 1) +
                     scale_y_reverse("Intents", limits=c(7.5, 0.5), breaks = c(7:1), minor_breaks = NULL) +
                     scale_x_continuous("Dies", breaks = seq(input$range[1], input$range[2], by = 1), minor_breaks = F) +
                     labs(
                         colour = "Usuari",
                     )
-                
+
                 plot
             }
-        }
+        },
+        height = 500,
     )
     
     output$distributionPlot <- renderPlot(
@@ -137,32 +145,28 @@ server <- function(input, output, session) {
                     geom_segment(data = . %>% group_by(author) %>% slice_max(day),
                                  aes(x=end_rank, xend=end_nameline, y = rnk, yend=rnk), size=2) +
                     geom_segment(data = . %>% group_by(author) %>% slice_max(day),
-                                 aes(x=end_nameline, xend=end_nameline + score - 2, y = rnk, yend=rnk), size=2) +
-                    geom_vline(xintercept = end_nameline, size= 2, color = "white") +
+                                 aes(x=end_nameline, xend=end_nameline + score * 4 / 7, y = rnk, yend=rnk), size=2) +
+                    geom_vline(xintercept = end_nameline, size=2, color = "white") +
                     geom_text(data = . %>% filter(day == max(day)),
                               aes(x = end_nameline, label = author), hjust = 1, vjust = -1.1) +
                     geom_text(data = . %>% filter(day == max(day)),
-                              aes(x = end_nameline + score + - 2 + 0.1, label = round(score, 2)), hjust =0, nudge_y = 0) +
+                              aes(x = end_nameline + score * 4 / 7 + 0.1, label = round(score, 2)), hjust =0, nudge_y = 0) +
                     scale_y_reverse("",
                                     breaks = length(unique(unlist(p_data %>% select(author)))):1,
                                     limits = c(length(unique(unlist(p_data %>% select(author)))) + 0.5, 0.5)
                                     ) +
                     scale_x_continuous("",
                                        breaks = seq(input$range[1], input$range[2], by = 1),
-                                       limits = c(input$range[1], input$range[2] + 5),
+                                       limits = c(input$range[1], input$range[2] + 5.5),
                                        ) +
-                    theme_void() +
                     labs(
-                         # title = "WordleCAT",
-                         subtitle = str_wrap("Evolució al llarg dels dies de la classifciació dels usuaris de twitter que han compartit el resultats del #WordleCAT mencionant a @aleixalbo.", 100),
-                        ) + 
+                        title = str_wrap("Classificació al #WordleCAT"),
+                        subtitle = str_wrap("Evolució al llarg dels dies de la classifciació dels usuaris de Twitter que han compartit el resultats del #WordleCAT mencionant a @aleixalbo.
+                                            La puntuació utilitzada és la mitjana dels intents realitzats cada dia.", 100),
+                        ) +
                     theme(
-                        plot.margin = margin(.5, .5, .5, .5, "cm"),
-                        legend.position = "none",
-                        # axis.text.x = element_text(),
-                        plot.title = element_text(size = 16, family = "Helvetica", face = "bold"),
+                        axis.text.y = element_blank(),
                     )
-                
                     
                 plot
                 }
