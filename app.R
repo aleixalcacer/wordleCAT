@@ -26,7 +26,7 @@ ggplot <- function(...) ggplot2::ggplot(...) +
         plot.caption = element_text(color = "black", family = "Helvetica"),
     ) +
     labs(
-        caption = "@aleixalbo"
+        caption = "Per a participar, comparteix els teus resultats mencionant a @aleixalbo!"
     )
 
 
@@ -67,6 +67,23 @@ ui <- fluidPage(
     )
 )
 
+compute_streak <- function(day) {
+    
+    c_streak = 0
+    s <- c(c_streak)
+    s_old = day[1]
+    for (i in 2:length(day)) {
+        s_new = day[i]
+        if (s_old + 1 != s_new) {
+            c_streak <- c_streak + 1
+        }
+        s <- c(s, c_streak)
+        s_old <- s_new
+    }
+    print(s)
+    return(s)
+}
+
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
     
@@ -74,19 +91,44 @@ server <- function(input, output, session) {
     levels_ <- reactive(unlist(filter_data_() %>% group_by(author) %>% summarize(score=sum(score) / n()) %>% arrange(score) %>% select(author)))
     filter_data <- reactive(filter_data_() %>% mutate(author = fct_relevel(author, levels_())))
     
+    
     output$resultsPlot <- renderPlot(
         {
             if (!is.null(input$authors)) {
                 p_data <- filter_data()
                 
-                plot <- ggplot(p_data, aes(x=day, y=score, group=author, color=author)) +
-                    geom_bump(size=2) +
-                    geom_point(size=4) +
-                    facet_wrap(~ author, ncol = 1) +
-                    scale_y_reverse("Intents", limits=c(7.5, 0.5), breaks = c(7:1), minor_breaks = NULL) +
-                    scale_x_continuous("Dies", breaks = seq(input$range[1], input$range[2], by = 1), minor_breaks = F) +
+                p_data <- p_data %>% group_by(author) %>% arrange(day) %>% mutate(streak = compute_streak(day), rnk=cur_group_id())
+                
+                end_rank <- input$range[2]
+                end_nameline <- end_rank + 2
+                
+                plot <- ggplot(p_data, aes(x=day, y=rnk, color=author)) +
+                    geom_path(aes(group = interaction(author, streak)), size=2, color="lightgrey") +
+                    geom_path(data = . %>% filter(streak == max(streak)), aes(group = interaction(author, streak)), size=2) +
+                    geom_point(aes(size=as.factor(score)), color="lightgrey") +
+                    geom_point(data = . %>% filter(streak == max(streak)), aes(size=as.factor(score))) +
+                    geom_segment(data = . %>% group_by(author) %>% slice_max(day),
+                                 aes(x=end_rank, xend=end_nameline, y = rnk, yend=rnk), size=2) +
+                    geom_segment(aes(x=end_nameline, xend=end_nameline, y = rnk, yend=rnk), size=2) +
+                    geom_vline(xintercept = end_nameline, size=2, color = "white") +
+                    geom_text(data = . %>% filter(day == max(day)),
+                              aes(x = end_nameline, label = author), hjust = 1, vjust = -1.1) +
+                    scale_y_reverse("",
+                                    breaks = length(unique(unlist(p_data %>% select(author)))):1,
+                                    limits = c(length(unique(unlist(p_data %>% select(author)))) + 0.5, 0.5)
+                    ) +
+                    scale_x_continuous("",
+                                       breaks = seq(input$range[1], input$range[2], by = 1),
+                                       limits = c(input$range[1], input$range[2] + 2.5),
+                    ) +
                     labs(
-                        colour = "Usuari",
+                        title = str_wrap("Històric al #WordleCAT"),
+                        subtitle = str_wrap("Resultats obtinguts per cada jugador al #WordleCAT.
+                                             En color es pot vore els dies consecutius que porta jugant cada jugador.
+                                             El tamany dels punts indica el número d'intents realitzats.", 100),
+                    ) +
+                    theme(
+                        axis.text.y = element_blank(),
                     )
 
                 plot
