@@ -29,8 +29,7 @@ ggplot <- function(...) ggplot2::ggplot(...) +
         caption = "Per a participar, comparteix els teus resultats mencionant a @aleixalbo!"
     )
 
-
-data <- read_csv("results.csv")
+data <- read_csv("results.csv") %>% complete(author, day)
 
 
 # Define UI for application that draws a histogram
@@ -67,59 +66,60 @@ ui <- fluidPage(
     )
 )
 
-compute_streak <- function(day) {
-    
+compute_streak <- function(score) {
     c_streak = 0
-    s <- c(c_streak)
-    s_old = day[1]
-    for (i in 2:length(day)) {
-        s_new = day[i]
-        if (s_old + 1 != s_new) {
+    streak = c()
+    for (i in 1:length(score)) {
+        s_new <- score[i]
+        if (is.na(s_new)) {
             c_streak <- c_streak + 1
         }
-        s <- c(s, c_streak)
-        s_old <- s_new
+        streak <- c(streak, c_streak)
+        if (is.na(s_new)) {
+            c_streak <- c_streak + 1
+        }
     }
-    print(s)
-    return(s)
+    return(streak)
 }
 
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
     
-    filter_data_ <- reactive(data %>% filter(day >= input$range[1] & day <= input$range[2]) %>% filter(author %in% input$authors))
-    levels_ <- reactive(unlist(filter_data_() %>% group_by(author) %>% summarize(score=sum(score) / n()) %>% arrange(score) %>% select(author)))
-    filter_data <- reactive(filter_data_() %>% mutate(author = fct_relevel(author, levels_())))
-    
+    filter_data <- reactive(data %>% filter(day >= input$range[1] & day <= input$range[2]) %>% filter(author %in% input$authors))
     
     output$resultsPlot <- renderPlot(
         {
             if (!is.null(input$authors)) {
                 p_data <- filter_data()
                 
-                p_data <- p_data %>% group_by(author) %>% arrange(day) %>% mutate(streak = compute_streak(day), rnk=cur_group_id())
+                p_data <- p_data %>% group_by(author) %>% arrange(day) %>% mutate(streak = compute_streak(score))
+                levels <-p_data %>% group_by(author) %>% filter(streak == max(streak)) %>% tally() %>% arrange(desc(n)) %>% pull(author)
+                p_data <- p_data %>% mutate(author = factor(author, levels, ordered = T))  %>% group_by(author) %>% mutate(rnk=cur_group_id())
                 
                 end_rank <- input$range[2]
                 end_nameline <- end_rank + 2
                 
                 plot <- ggplot(p_data, aes(x=day, y=rnk, color=author)) +
                     geom_path(aes(group = interaction(author, streak)), size=2, color="lightgrey") +
-                    geom_path(data = . %>% filter(streak == max(streak)), aes(group = interaction(author, streak)), size=2) +
                     geom_point(aes(size=as.factor(score)), color="lightgrey") +
+                    geom_path(data = . %>% filter(streak == max(streak)), aes(group = interaction(author, streak)), size=2) +
                     geom_point(data = . %>% filter(streak == max(streak)), aes(size=as.factor(score))) +
                     geom_segment(data = . %>% group_by(author) %>% slice_max(day),
                                  aes(x=end_rank, xend=end_nameline, y = rnk, yend=rnk), size=2) +
-                    geom_segment(aes(x=end_nameline, xend=end_nameline, y = rnk, yend=rnk), size=2) +
+                    geom_segment(data = . %>% group_by(author) %>% filter(streak == max(streak)) %>% drop_na() %>% add_tally(),
+                                 aes(x=end_nameline, xend=end_nameline + n * 5 / max(n), y = rnk, yend=rnk), size=2) +
                     geom_vline(xintercept = end_nameline, size=2, color = "white") +
                     geom_text(data = . %>% filter(day == max(day)),
                               aes(x = end_nameline, label = author), hjust = 1, vjust = -1.1) +
+                    geom_text(data = . %>% filter(streak == max(streak)) %>% drop_na() %>% add_tally(),
+                              aes(x = end_nameline + n * 5 / max(n) + 0.1, label = n), hjust = 0, nudge_y = 0) +
                     scale_y_reverse("",
                                     breaks = length(unique(unlist(p_data %>% select(author)))):1,
                                     limits = c(length(unique(unlist(p_data %>% select(author)))) + 0.5, 0.5)
                     ) +
                     scale_x_continuous("",
                                        breaks = seq(input$range[1], input$range[2], by = 1),
-                                       limits = c(input$range[1], input$range[2] + 2.5),
+                                       limits = c(input$range[1], input$range[2] + 8),
                     ) +
                     labs(
                         title = str_wrap("Històric al #WordleCAT"),
@@ -134,7 +134,6 @@ server <- function(input, output, session) {
                 plot
             }
         },
-        height = 500,
     )
     
     output$distributionPlot <- renderPlot(
@@ -162,7 +161,9 @@ server <- function(input, output, session) {
     output$rankingPlot <- renderPlot(
         {
             if(!is.null(input$authors)) {
+                levels <- filter_data() %>% drop_na() %>% group_by(author) %>% summarize(score=sum(score) / n()) %>% arrange(score) %>% pull(author)
                 p_data <- filter_data() %>%
+                    drop_na() %>%
                     group_by(author) %>%
                     arrange(day) %>%
                     mutate(score=cumsum(score) / row_number()) %>%
@@ -178,6 +179,9 @@ server <- function(input, output, session) {
                     mutate(rnk=row_number()) %>%
                     ungroup()
             
+                p_data <- p_data %>% mutate(author = factor(author, levels, ordered = T))
+                print(levels)
+                
                 end_rank <- input$range[2]
                 end_nameline <- end_rank + 2
 
@@ -187,23 +191,23 @@ server <- function(input, output, session) {
                     geom_segment(data = . %>% group_by(author) %>% slice_max(day),
                                  aes(x=end_rank, xend=end_nameline, y = rnk, yend=rnk), size=2) +
                     geom_segment(data = . %>% group_by(author) %>% slice_max(day),
-                                 aes(x=end_nameline, xend=end_nameline + score * 4 / 7, y = rnk, yend=rnk), size=2) +
+                                 aes(x=end_nameline, xend=end_nameline + score * 5 / max(score), y = rnk, yend=rnk), size=2) +
                     geom_vline(xintercept = end_nameline, size=2, color = "white") +
                     geom_text(data = . %>% filter(day == max(day)),
                               aes(x = end_nameline, label = author), hjust = 1, vjust = -1.1) +
                     geom_text(data = . %>% filter(day == max(day)),
-                              aes(x = end_nameline + score * 4 / 7 + 0.1, label = round(score, 2)), hjust =0, nudge_y = 0) +
+                              aes(x = end_nameline + score * 5 / max(score) + 0.1, label = round(score, 2)), hjust =0, nudge_y = 0) +
                     scale_y_reverse("",
                                     breaks = length(unique(unlist(p_data %>% select(author)))):1,
                                     limits = c(length(unique(unlist(p_data %>% select(author)))) + 0.5, 0.5)
                                     ) +
                     scale_x_continuous("",
                                        breaks = seq(input$range[1], input$range[2], by = 1),
-                                       limits = c(input$range[1], input$range[2] + 5.5),
+                                       limits = c(input$range[1], input$range[2] + 8),
                                        ) +
                     labs(
                         title = str_wrap("Classificació al #WordleCAT"),
-                        subtitle = str_wrap("Evolució al llarg dels dies de la classifciació dels usuaris de Twitter que han compartit el resultats del #WordleCAT mencionant a @aleixalbo.
+                        subtitle = str_wrap("Evolució al llarg dels dies de la classifciació al #WordleCAT.
                                             La puntuació utilitzada és la mitjana dels intents realitzats cada dia.", 100),
                         ) +
                     theme(
